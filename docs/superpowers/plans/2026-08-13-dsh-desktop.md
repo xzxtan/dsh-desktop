@@ -1060,6 +1060,7 @@ public sealed class BackendManager : IDisposable
 
     private TextWriter CreateBackendLogWriter()
     {
+        Directory.CreateDirectory(AppPaths.LogsDir);
         var path = Path.Combine(AppPaths.LogsDir, "backend.log");
         return new StreamWriter(new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite))
         {
@@ -1078,16 +1079,25 @@ public sealed class BackendManager : IDisposable
     private async Task MonitorLoopAsync(CancellationToken ct)
     {
         var failures = 0;
+        var interval = TimeSpan.FromSeconds(_settings.HealthIntervalSeconds);
+        // 绝对时间点调度：FakeTimeProvider.Advance() 大步进后，错过的探测周期立即排空，
+        // 相对 Task.Delay 在时钟一次性前跳后只会触发一次（continuation 不内联运行）。
+        var next = _time.GetUtcNow() + interval;
         while (!ct.IsCancellationRequested)
         {
-            try
+            var wait = next - _time.GetUtcNow();
+            if (wait > TimeSpan.Zero)
             {
-                await Task.Delay(TimeSpan.FromSeconds(_settings.HealthIntervalSeconds), _time, ct);
+                try
+                {
+                    await Task.Delay(wait, _time, ct);
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
             }
-            catch (OperationCanceledException)
-            {
-                return;
-            }
+            next += interval;
 
             if (OwnedProcessId is { } pid && !_runner.IsRunning(pid))
             {
