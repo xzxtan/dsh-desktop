@@ -902,11 +902,11 @@ public sealed class BackendManagerTests
     }
 
     [Fact]
-    public void StopOwnedBackend_NoOp_WhenAttachedOnly()
+    public async Task StopOwnedBackend_NoOp_WhenAttachedOnly()
     {
         var (manager, probe, runner, _) = NewManager();
         probe.Results.Enqueue(ProbeResult.Ready);
-        manager.EnsureStartedAsync().GetAwaiter().GetResult();
+        Assert.True(await manager.EnsureStartedAsync());
 
         manager.StopOwnedBackend();
 
@@ -997,6 +997,8 @@ public sealed class BackendManager : IDisposable
                 Transition(BackendState.Failed);
                 return false;
         }
+
+        _healthCts?.Cancel(); // 停止旧监控循环：重试拉起期间避免旧循环把 Spawning/WaitingReady 误报为 Offline
 
         Transition(BackendState.Spawning);
         _log.Info($"启动后端: {_settings.DshCommand} {string.Join(' ', _settings.DshArgs)}");
@@ -1383,6 +1385,15 @@ public partial class MainWindow : Window
         _backend = backend;
         InitializeComponent();
         _backend.StateChanged += OnBackendStateChanged;
+
+        var placement = App.Settings;
+        if (!double.IsNaN(placement.WindowLeft) && !double.IsNaN(placement.WindowTop))
+        {
+            Left = placement.WindowLeft;
+            Top = placement.WindowTop;
+        }
+        Width = placement.WindowWidth;
+        Height = placement.WindowHeight;
     }
 
     public async Task InitAsync()
@@ -1472,6 +1483,8 @@ public partial class MainWindow : Window
         var ok = await _backend.RetryAsync();
         if (ok && Browser.CoreWebView2 is not null)
             NavigateToBackend();
+        else if (!ok)
+            ShowOverlay("启动失败", "无法启动 dsh web。可在设置中配置 dsh 路径后重试。", showRetry: true);
     }
 
     private void Settings_Click(object sender, RoutedEventArgs e)
@@ -1493,6 +1506,20 @@ public partial class MainWindow : Window
 
     protected override void OnClosing(CancelEventArgs e)
     {
+        var placement = App.Settings;
+        placement.WindowLeft = Left;
+        placement.WindowTop = Top;
+        placement.WindowWidth = Width;
+        placement.WindowHeight = Height;
+        try
+        {
+            App.SettingsStore.Save(placement);
+        }
+        catch (Exception ex)
+        {
+            App.Log.Error("保存窗口位置失败", ex);
+        }
+
         if (App.IsExiting) return;
         if (App.Settings.CloseToTray)
         {
@@ -1852,7 +1879,7 @@ public sealed class TrayService : IDisposable
     {
         _backend = backend;
         _window = window;
-        _backend.StateChanged += _ => Update();
+        _backend.StateChanged += OnBackendStateChanged;
     }
 
     public void Initialize()
@@ -1901,6 +1928,8 @@ public sealed class TrayService : IDisposable
         _window.Activate();
     }
 
+    private void OnBackendStateChanged(BackendState _) => Update();
+
     private void Update()
     {
         if (!_window.Dispatcher.CheckAccess())
@@ -1929,7 +1958,11 @@ public sealed class TrayService : IDisposable
         _icon.ToolTipText = $"DeepSeek Harness — {_stateItem.Header}";
     }
 
-    public void Dispose() => _icon.Dispose();
+    public void Dispose()
+    {
+        _backend.StateChanged -= OnBackendStateChanged;
+        _icon.Dispose();
+    }
 }
 ```
 
@@ -2347,6 +2380,8 @@ public partial class SettingsWindow : Window
         var ok = await _backend.RetryAsync();
         if (ok && Browser.CoreWebView2 is not null)
             NavigateToBackend();
+        else if (!ok)
+            ShowOverlay("启动失败", "无法启动 dsh web。可在设置中配置 dsh 路径后重试。", showRetry: true);
     }
 ```
 
