@@ -6,7 +6,6 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
-using System.Windows.Threading;
 using DshDesktop.Backend;
 using Microsoft.Web.WebView2.Core;
 
@@ -294,77 +293,26 @@ public partial class MainWindow : Window
         return false;
     }
 
-    private const int SWP_NOSIZE = 0x0001;
-    private const int SWP_NOZORDER = 0x0004;
-    private const int SWP_NOACTIVATE = 0x0010;
-    private const int VK_LBUTTON = 0x01;
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct POINT { public int X; public int Y; }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct RECT { public int Left, Top, Right, Bottom; }
-
-    [DllImport("user32.dll")]
-    private static extern bool GetCursorPos(out POINT pt);
-
-    [DllImport("user32.dll")]
-    private static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
-
-    [DllImport("user32.dll")]
-    private static extern bool IsWindow(IntPtr hWnd);
-
-    [DllImport("user32.dll")]
-    private static extern short GetAsyncKeyState(int vKey);
-
-    [DllImport("user32.dll")]
-    private static extern bool SetWindowPos(IntPtr hWnd, IntPtr insertAfter,
-        int x, int y, int cx, int cy, uint flags);
+    private const int WM_NCLBUTTONDOWN = 0x00A1;
+    private const int HT_CAPTION = 2;
 
     [DllImport("user32.dll")]
     private static extern bool ReleaseCapture();
 
+    [DllImport("user32.dll")]
+    private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+
     /// <summary>
-    /// 自实现拖动：合成 WM_NCLBUTTONDOWN/HTCAPTION 在 WPF+WebView2 组合下不可靠，
-    /// 改为轮询真实光标位置 + SetWindowPos 逐帧移动（DispatcheTimer，按钮松开即停）。
-    /// 页面注入脚本与离线覆盖层共用。
+    /// 进入系统原生移动循环（含 Aero Snap 分屏/贴靠）。
+    /// 关键：先 ReleaseCapture 释放 WebView2 子窗口的鼠标捕获，
+    /// 否则合成 WM_NCLBUTTONDOWN 进不了 DefWindowProc 的移动循环。
     /// </summary>
     internal void BeginWindowDrag()
     {
         var hwnd = new WindowInteropHelper(this).Handle;
         if (hwnd == IntPtr.Zero) return;
-
-        // 最大化时先还原：窗口置于光标下（标题区上沿对齐光标）
-        if (WindowState == WindowState.Maximized)
-        {
-            var rb = RestoreBounds;
-            WindowState = WindowState.Normal;
-            GetCursorPos(out var cur);
-            var dpi = VisualTreeHelper.GetDpi(this);
-            Left = cur.X / dpi.DpiScaleX - rb.Width / 2;
-            Top = cur.Y / dpi.DpiScaleY - 12;
-        }
-
-        ReleaseCapture(); // 松开 WebView2 子窗口的捕获，避免页面继续选择/拖拽
-
-        GetWindowRect(hwnd, out var rect);
-        GetCursorPos(out var start);
-        var offsetX = Math.Clamp(start.X - rect.Left, 0, Math.Max(0, rect.Right - rect.Left));
-        var offsetY = Math.Clamp(start.Y - rect.Top, 0, 36);
-
-        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(10) };
-        timer.Tick += (_, _) =>
-        {
-            if ((GetAsyncKeyState(VK_LBUTTON) & 0x8000) == 0 || !IsWindow(hwnd))
-            {
-                timer.Stop();
-                return;
-            }
-            GetCursorPos(out var p);
-            SetWindowPos(hwnd, IntPtr.Zero, p.X - offsetX, p.Y - offsetY, 0, 0,
-                SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
-        };
-        timer.Start();
+        ReleaseCapture();
+        SendMessage(hwnd, WM_NCLBUTTONDOWN, new IntPtr(HT_CAPTION), IntPtr.Zero);
     }
 
     protected override void OnKeyDown(KeyEventArgs e)
