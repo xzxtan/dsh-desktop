@@ -2362,7 +2362,8 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$root = Split-Path $PSScriptRoot -Parent
+# 脚本位于 <repo>\src\DshDesktop\publish.ps1：两次 Parent 得到仓库根
+$root = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $out = if ($SelfContained) { "$root/dist/self-contained" } else { "$root/dist/framework-dependent" }
 
 dotnet publish "$root/src/DshDesktop/DshDesktop.csproj" -c Release -r $Runtime `
