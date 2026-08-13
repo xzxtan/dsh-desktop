@@ -5,7 +5,7 @@
         xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
         Title="DeepSeek Harness"
         Icon="/assets/app.ico"
-        Background="#141826"
+        Background="#151517"
         Width="1280" Height="800"
         WindowStyle="None"
         ResizeMode="CanResize"
@@ -71,10 +71,14 @@
     </Window.Resources>
 
     <Grid>
-        <wv2:WebView2 x:Name="Browser" Visibility="Collapsed" />
+        <!-- 6px 内容内边距：露出窗口背景（页面同色，视觉隐形），
+             该环带由 WindowChrome 原生命中测试接管，提供边缘缩放与 Aero 贴靠。
+             WebView2 子窗口盖满客户区会吞掉父窗口的 NC 命中，这是必须留边的原因。
+             注意：边距必须直接挂在 WebView2 控件上——HwndHost 不吃父容器边距。 -->
+        <wv2:WebView2 x:Name="Browser" Margin="6" Visibility="Collapsed" />
 
-        <!-- 离线/启动覆盖层：整窗兜底，左上品牌、右上窗口按钮、中央状态 -->
-        <Border x:Name="Overlay" Background="#F0141826"
+        <!-- 离线/启动覆盖层：左上品牌、右上窗口按钮、中央状态 -->
+        <Border x:Name="Overlay" Background="#151517" Margin="6"
                 MouseLeftButtonDown="Overlay_MouseLeftButtonDown">
             <Grid>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Top"
