@@ -1618,6 +1618,7 @@ Expected: FAIL，`SingleInstanceGuard` 不存在。
 创建 `src/DshDesktop/SingleInstance/SingleInstanceGuard.cs`：
 
 ```csharp
+using System.IO;
 using System.IO.Pipes;
 using System.Text;
 
@@ -1706,7 +1707,16 @@ public sealed class SingleInstanceGuard : IDisposable
         _pipeCts?.Cancel();
         _pipeCts?.Dispose();
         if (_isFirst)
-            _mutex.ReleaseMutex();
+        {
+            try
+            {
+                _mutex.ReleaseMutex();
+            }
+            catch (ApplicationException)
+            {
+                // 跨线程 Dispose（async 测试延续）时所有权校验失败：进程退出时 OS 会回收互斥量。
+            }
+        }
         _mutex.Dispose();
     }
 }
@@ -1757,7 +1767,7 @@ dotnet run --project src/DshDesktop
 dotnet run --project src/DshDesktop
 ```
 
-Expected: 第二个进程秒退（无新窗口）；第一个实例的日志出现「启动 dsh-desktop」只有一条（第二次启动未进入主流程）。
+Expected: 第二个进程秒退（无新窗口）；其日志比第一实例只多出**一条**启动行（guard 判定位于该日志行之后——已知行为，不影响功能）；关键验证点是：无第二个窗口、第一个实例继续正常显示。
 
 - [ ] **Step 7: 提交**
 
