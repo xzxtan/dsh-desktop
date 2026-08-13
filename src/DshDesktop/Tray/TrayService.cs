@@ -82,7 +82,10 @@ public sealed class TrayService : IDisposable
             BackendState.Failed => "状态：启动失败",
             _ => "状态：连接中…",
         };
-        _restartItem.IsEnabled = _backend.OwnsBackend;
+        _restartItem.IsEnabled = _backend.OwnsBackend
+            || _backend.State is BackendState.Offline or BackendState.Failed;
+        // 用户裁决（2026-08-13）：自有后端崩溃后 OwnedProcessId 已置空，若只看 OwnsBackend
+        // 菜单恰在最需要时变灰。恢复语义下 Offline/Failed 总是可重启；Online+attach 仍禁用。
         _icon.IconSource = _backend.State switch
         {
             BackendState.Online => TrayIcons.Online,
