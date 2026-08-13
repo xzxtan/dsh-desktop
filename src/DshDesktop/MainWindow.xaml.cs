@@ -1,7 +1,9 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Interop;
 using DshDesktop.Backend;
 using Microsoft.Web.WebView2.Core;
 
@@ -26,6 +28,29 @@ public partial class MainWindow : Window
         Width = placement.WindowWidth;
         Height = placement.WindowHeight;
     }
+
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        ApplyDarkTitleBar();
+    }
+
+    /// <summary>把标题栏切到深色模式，消除与深色 Web UI 之间的白色标题栏。</summary>
+    private void ApplyDarkTitleBar()
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd == IntPtr.Zero) return;
+        var useDark = 1;
+        // 属性 20 用于 Win10 2004+；失败回退旧属性 19（Win10 1809+）
+        if (DwmSetWindowAttribute(hwnd, DwmwaUseImmersiveDarkMode, ref useDark, sizeof(int)) != 0)
+            DwmSetWindowAttribute(hwnd, DwmwaUseImmersiveDarkModeLegacy, ref useDark, sizeof(int));
+    }
+
+    private const int DwmwaUseImmersiveDarkMode = 20;
+    private const int DwmwaUseImmersiveDarkModeLegacy = 19;
+
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
 
     public async Task InitAsync()
     {
