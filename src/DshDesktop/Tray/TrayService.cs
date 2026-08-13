@@ -42,9 +42,7 @@ public sealed class TrayService : IDisposable
         _restartItem = new MenuItem { Header = "重启后端" };
         _restartItem.Click += async (_, _) => await _backend.RetryAsync();
         var settings = new MenuItem { Header = "设置" };
-        settings.Click += (_, _) =>
-            MessageBox.Show($"设置文件: {AppPaths.SettingsFile}", "设置",
-                MessageBoxButton.OK, MessageBoxImage.Information);
+        settings.Click += (_, _) => new SettingsWindow().ShowDialog();
         var exit = new MenuItem { Header = "退出" };
         exit.Click += (_, _) => App.RequestExit();
 

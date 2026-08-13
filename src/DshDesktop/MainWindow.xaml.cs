@@ -20,7 +20,22 @@ public partial class MainWindow : Window
 
     public async Task InitAsync()
     {
-        var env = await CoreWebView2Environment.CreateAsync(null, AppPaths.WebView2UserDataDir);
+        CoreWebView2Environment env;
+        try
+        {
+            env = await CoreWebView2Environment.CreateAsync(null, AppPaths.WebView2UserDataDir);
+        }
+        catch (WebView2RuntimeNotFoundException)
+        {
+            ShowOverlay(
+                "缺少 WebView2 运行时",
+                "需要 Microsoft Edge WebView2 Evergreen Runtime。点击下方按钮前往微软官网下载安装。",
+                showRetry: false);
+            RetryButton.Content = "下载 WebView2";
+            RetryButton.Visibility = Visibility.Visible;
+            return;
+        }
+        RetryButton.Content = "重试";
         await Browser.EnsureCoreWebView2Async(env);
         Browser.CoreWebView2.Settings.AreDevToolsEnabled = true;
         Browser.CoreWebView2.NewWindowRequested += (_, e) =>
@@ -101,6 +116,16 @@ public partial class MainWindow : Window
 
     private async void Retry_Click(object sender, RoutedEventArgs e)
     {
+        if (RetryButton.Content?.ToString() == "下载 WebView2")
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo(
+                    "https://developer.microsoft.com/microsoft-edge/webview2/") { UseShellExecute = true });
+            }
+            catch { /* 忽略 */ }
+            return;
+        }
         ShowOverlay("正在重连…", "正在重新连接后端…", showRetry: false);
         var ok = await _backend.RetryAsync();
         if (ok && Browser.CoreWebView2 is not null)
@@ -109,10 +134,7 @@ public partial class MainWindow : Window
 
     private void Settings_Click(object sender, RoutedEventArgs e)
     {
-        // Task 9 引入设置对话框；当前阶段直接打开 settings.json 所在目录提示
-        MessageBox.Show(
-            $"设置文件: {AppPaths.SettingsFile}\n\n（设置对话框将在后续任务提供）",
-            "设置", MessageBoxButton.OK, MessageBoxImage.Information);
+        new SettingsWindow().ShowDialog();
     }
 
     protected override void OnKeyDown(KeyEventArgs e)
