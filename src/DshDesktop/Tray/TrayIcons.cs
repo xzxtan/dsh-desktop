@@ -1,25 +1,20 @@
-using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
 namespace DshDesktop.Tray;
 
+/// <summary>
+/// 托盘三态图标：均使用 DSH 鲸鱼图形（源自 dsh-web-frontend 的 favicon.svg），
+/// 用底色区分状态——在线=品牌蓝、离线=红、启动中=灰。
+/// </summary>
 public static class TrayIcons
 {
-    public static ImageSource Online { get; } = Make(0xFF2E7D32);
-    public static ImageSource Offline { get; } = Make(0xFFC62828);
-    public static ImageSource Starting { get; } = Make(0xFF9E9E9E);
+    public static BitmapSource Online { get; } = Load("tray-online.png");
+    public static BitmapSource Offline { get; } = Load("tray-offline.png");
+    public static BitmapSource Starting { get; } = Load("tray-starting.png");
 
-    private static ImageSource Make(uint argb)
+    private static BitmapSource Load(string name)
     {
-        const int size = 16;
-        var a = (byte)(argb >> 24);
-        var r = (byte)(argb >> 16);
-        var g = (byte)(argb >> 8);
-        var b = (byte)argb;
-        var value = (uint)((a << 24) | (r << 16) | (g << 8) | b); // BGRA 内存序
-        var pixels = new uint[size * size];
-        Array.Fill(pixels, value);
-        var bmp = BitmapSource.Create(size, size, 96, 96, PixelFormats.Bgra32, null, pixels, size * 4);
+        var bmp = new BitmapImage(new Uri($"pack://application:,,,/assets/{name}"));
         bmp.Freeze();
         return bmp;
     }

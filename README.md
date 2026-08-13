@@ -46,6 +46,13 @@ powershell src/DshDesktop/publish.ps1 -SelfContained
 
 日志：`%APPDATA%\dsh-desktop\logs\`（`dsh-desktop.log` 壳日志、`backend.log` 后端输出）。
 
+## 图标
+
+应用与托盘图标使用 DeepSeek Harness 的鲸鱼图形（`dsh-web-frontend/dist/favicon.svg`，MIT），
+以品牌蓝 `#5686FE`（`--dsw-static-deepseek-450`）为底重新渲染：
+`src/DshDesktop/assets/app.ico`（256→16 多尺寸）与 `tray-{online,offline,starting}.png`（托盘三态，
+底色分别为品牌蓝 / 红 / 灰）。原始 SVG 存于 `src/DshDesktop/assets/whale.svg`。
+
 ## 已知限制
 
-- 仅 Windows；应用图标暂为默认（待定）；深链会话跳转未实现；无自动更新。
+- 仅 Windows；深链会话跳转未实现；无自动更新。
