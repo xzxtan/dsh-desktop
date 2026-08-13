@@ -2,8 +2,10 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Media;
 using DshDesktop.Backend;
 using Microsoft.Web.WebView2.Core;
 
@@ -29,28 +31,108 @@ public partial class MainWindow : Window
         Height = placement.WindowHeight;
     }
 
-    protected override void OnSourceInitialized(EventArgs e)
-    {
-        base.OnSourceInitialized(e);
-        ApplyDarkTitleBar();
-    }
+    /// <summary>
+    /// 注入到 Harness 页面的脚本（每个文档创建时注册，DOMContentLoaded 后执行，幂等自愈）：
+    /// 1) 右上角悬浮窗口按钮簇（─ □ ✕），经 hostObjects.dshShell 桥接宿主；
+    /// 2) 给页面顶栏右侧预留 118px，避免按钮簇压住 Session log / 详情抽屉；
+    /// 3) 顶栏 76px 空白区拖动窗口（排除交互元素），双击切换最大化。
+    /// 注意：document-created 阶段 head/documentElement 尚为 null，必须延迟到 DOMContentLoaded；
+    /// dev 版 HMR 会整页热重载，MutationObserver + 2s 定时器保证簇被抹掉后自动重建。
+    /// </summary>
+    private const string ShellInjection = """
+        (() => {
+          if (window.__dshShellInjected) return;
+          window.__dshShellInjected = true;
 
-    /// <summary>把标题栏切到深色模式，消除与深色 Web UI 之间的白色标题栏。</summary>
-    private void ApplyDarkTitleBar()
-    {
-        var hwnd = new WindowInteropHelper(this).Handle;
-        if (hwnd == IntPtr.Zero) return;
-        var useDark = 1;
-        // 属性 20 用于 Win10 2004+；失败回退旧属性 19（Win10 1809+）
-        if (DwmSetWindowAttribute(hwnd, DwmwaUseImmersiveDarkMode, ref useDark, sizeof(int)) != 0)
-            DwmSetWindowAttribute(hwnd, DwmwaUseImmersiveDarkModeLegacy, ref useDark, sizeof(int));
-    }
+          const css = `
+          #dsh-shell-cluster { position: fixed; top: 2px; right: 2px; z-index: 2147483000;
+            display: flex; gap: 2px; height: 28px; padding: 0 2px; border-radius: 6px;
+            background: rgba(20,24,38,0.92); -webkit-user-select: none; user-select: none; }
+          #dsh-shell-cluster button { all: unset; width: 36px; height: 28px; display: inline-flex;
+            align-items: center; justify-content: center; color: #C8CDD6;
+            font: 12px 'Segoe MDL2 Assets'; cursor: default; border-radius: 4px; }
+          #dsh-shell-cluster button:hover { background: rgba(255,255,255,0.14); }
+          #dsh-shell-cluster button#dsh-shell-close:hover { background: #C42B1C; color: #fff; }
+          .wSkVaW_headerUtilities { margin-right: 118px !important; }
+          .ydkMvW_header { padding-right: 118px !important; }
+          `;
 
-    private const int DwmwaUseImmersiveDarkMode = 20;
-    private const int DwmwaUseImmersiveDarkModeLegacy = 19;
+          const shell = () => window.chrome?.webview?.hostObjects?.dshShell;
 
-    [DllImport("dwmapi.dll")]
-    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
+          const ensure = () => {
+            try {
+              if (!document.getElementById('dsh-shell-style')) {
+                const style = document.createElement('style');
+                style.id = 'dsh-shell-style';
+                style.textContent = css;
+                (document.head || document.documentElement).appendChild(style);
+              }
+              if (!document.getElementById('dsh-shell-cluster')) {
+                const cluster = document.createElement('div');
+                cluster.id = 'dsh-shell-cluster';
+                const mk = (label, id, action) => {
+                  const b = document.createElement('button');
+                  b.id = id; b.textContent = label;
+                  b.addEventListener('mousedown', e => { e.stopPropagation(); e.preventDefault(); });
+                  b.addEventListener('click', e => { e.stopPropagation(); e.preventDefault(); action(); });
+                  return b;
+                };
+                cluster.append(
+                  mk('\uE921', 'dsh-shell-min', () => shell()?.Minimize()),
+                  mk('\uE922', 'dsh-shell-max', () => shell()?.ToggleMaximize()),
+                  mk('\uE8BB', 'dsh-shell-close', () => shell()?.Close())
+                );
+                (document.body || document.documentElement).appendChild(cluster);
+              }
+              if (!document.__dshShellListeners) {
+                document.__dshShellListeners = true;
+                const INTERACTIVE = 'button,a,input,textarea,select,label,[role="button"],#dsh-shell-cluster';
+                let down = null;
+                document.addEventListener('mousedown', e => {
+                  if (e.button !== 0 || e.clientY > 76) return;
+                  const t = e.target;
+                  if (t && t.closest && t.closest(INTERACTIVE)) return;
+                  down = { x: e.clientX, y: e.clientY, dragged: false };
+                }, true);
+                document.addEventListener('mousemove', e => {
+                  if (!down || down.dragged) return;
+                  if (Math.abs(e.clientX - down.x) + Math.abs(e.clientY - down.y) > 4) {
+                    down.dragged = true;
+                    shell()?.BeginDrag();
+                  }
+                }, true);
+                document.addEventListener('mouseup', () => { down = null; }, true);
+                document.addEventListener('dblclick', e => {
+                  if (e.clientY > 76) return;
+                  const t = e.target;
+                  if (t && t.closest && t.closest(INTERACTIVE)) return;
+                  shell()?.ToggleMaximize();
+                }, true);
+              }
+            } catch (err) {
+              console.error('dsh-shell injection failed:', err);
+            }
+          };
+
+          const boot = () => {
+            ensure();
+            try {
+              new MutationObserver(() => {
+                if (!document.getElementById('dsh-shell-style') || !document.getElementById('dsh-shell-cluster'))
+                  ensure();
+              }).observe(document.documentElement, { childList: true, subtree: true });
+            } catch { /* 文档被整体替换时观察器失效，由下面的定时器兜底 */ }
+            setInterval(() => {
+              if (!document.getElementById('dsh-shell-style') || !document.getElementById('dsh-shell-cluster'))
+                ensure();
+            }, 2000);
+          };
+
+          if (document.readyState === 'loading')
+            document.addEventListener('DOMContentLoaded', boot, { once: true });
+          else boot();
+        })();
+        """;
 
     public async Task InitAsync()
     {
@@ -71,8 +153,12 @@ public partial class MainWindow : Window
         }
         RetryButton.Content = "重试";
         await Browser.EnsureCoreWebView2Async(env);
-        Browser.CoreWebView2.Settings.AreDevToolsEnabled = true;
-        Browser.CoreWebView2.NewWindowRequested += (_, e) =>
+        var core = Browser.CoreWebView2;
+        core.Settings.AreDevToolsEnabled = true;
+        core.Settings.AreHostObjectsAllowed = true;
+        core.AddHostObjectToScript("dshShell", new ShellBridge(this));
+        await core.AddScriptToExecuteOnDocumentCreatedAsync(ShellInjection);
+        core.NewWindowRequested += (_, e) =>
         {
             e.Handled = true;
             try
@@ -185,6 +271,34 @@ public partial class MainWindow : Window
     {
         base.OnStateChanged(e);
         MaximizeButton.Content = WindowState == WindowState.Maximized ? "\uE923" : "\uE922";
+    }
+
+    /// <summary>覆盖层空白区按下 = 拖动窗口（按钮区域除外）。</summary>
+    private void Overlay_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (IsInsideButton(e.OriginalSource)) return;
+        BeginWindowDrag();
+    }
+
+    private static bool IsInsideButton(object? source)
+    {
+        for (var d = source as DependencyObject; d is not null; d = VisualTreeHelper.GetParent(d))
+            if (d is Button) return true;
+        return false;
+    }
+
+    private const int WM_NCLBUTTONDOWN = 0x00A1;
+    private const int HT_CAPTION = 2;
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+
+    /// <summary>进入系统拖动循环（页面注入脚本与覆盖层共用）。</summary>
+    internal void BeginWindowDrag()
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd != IntPtr.Zero)
+            SendMessage(hwnd, WM_NCLBUTTONDOWN, new IntPtr(HT_CAPTION), IntPtr.Zero);
     }
 
     protected override void OnKeyDown(KeyEventArgs e)

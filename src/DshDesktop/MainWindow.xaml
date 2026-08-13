@@ -11,7 +11,8 @@
         ResizeMode="CanResize"
         WindowStartupLocation="CenterScreen">
     <WindowChrome.WindowChrome>
-        <shell:WindowChrome CaptionHeight="36"
+        <!-- 全出血：无标题条；仅保留 6px 缩放边框与系统贴靠行为 -->
+        <shell:WindowChrome CaptionHeight="0"
                             ResizeBorderThickness="6"
                             CornerRadius="0"
                             GlassFrameThickness="0"
@@ -19,10 +20,9 @@
     </WindowChrome.WindowChrome>
 
     <Window.Resources>
-        <!-- 自绘标题栏按钮：Codex 风格暗色，悬停浅灰，关闭按钮悬停红 -->
         <Style x:Key="TitleBarButton" TargetType="Button">
             <Setter Property="Width" Value="46" />
-            <Setter Property="Height" Value="36" />
+            <Setter Property="Height" Value="30" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="Foreground" Value="#C8CDD6" />
             <Setter Property="BorderThickness" Value="0" />
@@ -30,7 +30,6 @@
             <Setter Property="FontFamily" Value="Segoe MDL2 Assets" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Focusable" Value="False" />
-            <Setter Property="shell:WindowChrome.IsHitTestVisibleInChrome" Value="True" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
@@ -72,30 +71,29 @@
     </Window.Resources>
 
     <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="36" />
-            <RowDefinition Height="*" />
-        </Grid.RowDefinitions>
+        <wv2:WebView2 x:Name="Browser" Visibility="Collapsed" />
 
-        <!-- 自绘标题条：整条为 WindowChrome 拖动区（双击最大化由系统处理） -->
-        <Grid Grid.Row="0" Background="#141826">
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
-                <Image Source="/assets/tray-online.png" Width="16" Height="16"
-                       RenderOptions.BitmapScalingMode="HighQuality" />
-                <TextBlock Text="DeepSeek Harness" Foreground="#C8CDD6" FontSize="12"
-                           VerticalAlignment="Center" Margin="8,0,0,0" />
-            </StackPanel>
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                <Button Style="{StaticResource TitleBarButton}" Content="&#xE921;" ToolTip="最小化" Click="Minimize_Click" />
-                <Button x:Name="MaximizeButton" Style="{StaticResource TitleBarButton}" Content="&#xE922;" ToolTip="最大化 / 还原" Click="Maximize_Click" />
-                <Button Style="{StaticResource TitleBarCloseButton}" Content="&#xE8BB;" ToolTip="关闭" Click="CloseWindow_Click" />
-            </StackPanel>
-        </Grid>
+        <!-- 离线/启动覆盖层：整窗兜底，左上品牌、右上窗口按钮、中央状态 -->
+        <Border x:Name="Overlay" Background="#F0141826"
+                MouseLeftButtonDown="Overlay_MouseLeftButtonDown">
+            <Grid>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Top"
+                            Margin="14,10,0,0">
+                    <Image Source="/assets/tray-online.png" Width="18" Height="18"
+                           RenderOptions.BitmapScalingMode="HighQuality" />
+                    <TextBlock Text="DeepSeek Harness" Foreground="#C8CDD6" FontSize="13"
+                               VerticalAlignment="Center" Margin="8,0,0,0" />
+                </StackPanel>
 
-        <!-- 内容区 -->
-        <Grid Grid.Row="1">
-            <wv2:WebView2 x:Name="Browser" Visibility="Collapsed" />
-            <Border x:Name="Overlay" Background="#F0141826">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
+                    <Button Style="{StaticResource TitleBarButton}" Content="&#xE921;"
+                            ToolTip="最小化" Click="Minimize_Click" />
+                    <Button x:Name="MaximizeButton" Style="{StaticResource TitleBarButton}" Content="&#xE922;"
+                            ToolTip="最大化 / 还原" Click="Maximize_Click" />
+                    <Button Style="{StaticResource TitleBarCloseButton}" Content="&#xE8BB;"
+                            ToolTip="关闭" Click="CloseWindow_Click" />
+                </StackPanel>
+
                 <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
                     <TextBlock x:Name="OverlayTitle" Text="正在启动 DeepSeek Harness…"
                                FontSize="20" Foreground="White" HorizontalAlignment="Center" />
@@ -107,7 +105,7 @@
                         <Button Content="打开设置" Width="96" Click="Settings_Click" />
                     </StackPanel>
                 </StackPanel>
-            </Border>
-        </Grid>
+            </Grid>
+        </Border>
     </Grid>
 </Window>
