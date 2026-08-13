@@ -11,10 +11,12 @@
         ResizeMode="CanResize"
         WindowStartupLocation="CenterScreen">
     <WindowChrome.WindowChrome>
-        <!-- 全出血：无标题条；仅保留 6px 缩放边框与系统贴靠行为 -->
+        <!-- 全出血：无标题条；仅保留 6px 缩放边框与系统贴靠行为。
+             CornerRadius=12：Win10 下由 WindowChrome 内部用窗口区域实现四角圆角
+             （手工 SetWindowRgn 会被 WindowChrome 的区域管理覆盖）。 -->
         <shell:WindowChrome CaptionHeight="0"
                             ResizeBorderThickness="6"
-                            CornerRadius="0"
+                            CornerRadius="12"
                             GlassFrameThickness="0"
                             UseAeroCaptionButtons="False" />
     </WindowChrome.WindowChrome>
