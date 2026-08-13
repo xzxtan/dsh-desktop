@@ -1,5 +1,6 @@
 using System.Windows;
 using DshDesktop.Backend;
+using DshDesktop.DeepLink;
 using DshDesktop.Logging;
 using DshDesktop.Settings;
 using DshDesktop.SingleInstance;
@@ -36,6 +37,8 @@ public partial class App : Application
             return;
         }
 
+        DeepLinkRegistrar.Register(Environment.ProcessPath ?? "DshDesktop.exe");
+
         Backend = new BackendManager(Settings, new HttpBackendProbe(), new ProcessRunner(), Log);
         Backend.StateChanged += state => Log.Info($"后端状态: {state}");
 
@@ -49,6 +52,24 @@ public partial class App : Application
 
         _tray = new TrayService(Backend, _mainWindow);
         _tray.Initialize();
+
+        _guard.ArgsForwarded += OnArgsForwarded;
+        _guard.StartListening();
+    }
+
+    private void OnArgsForwarded(string[] args)
+    {
+        _mainWindow?.Dispatcher.Invoke(() =>
+        {
+            _mainWindow.Show();
+            _mainWindow.WindowState = WindowState.Normal;
+            _mainWindow.Activate();
+        });
+        foreach (var arg in args)
+        {
+            if (DeepLinkRequest.TryParse(arg, out var request))
+                Log.Info($"深链: {request.Action}{(request.SessionId is null ? "" : " " + request.SessionId)}");
+        }
     }
 
     public static void RequestExit()
