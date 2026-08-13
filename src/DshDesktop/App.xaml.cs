@@ -3,6 +3,7 @@ using DshDesktop.Backend;
 using DshDesktop.Logging;
 using DshDesktop.Settings;
 using DshDesktop.SingleInstance;
+using DshDesktop.Tray;
 
 namespace DshDesktop;
 
@@ -16,6 +17,7 @@ public partial class App : Application
 
     private MainWindow? _mainWindow;
     private SingleInstanceGuard? _guard;
+    private TrayService? _tray;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -44,6 +46,9 @@ public partial class App : Application
 
         var started = await Backend.EnsureStartedAsync();
         Log.Info(started ? "后端就绪" : "后端未就绪（离线覆盖层）");
+
+        _tray = new TrayService(Backend, _mainWindow);
+        _tray.Initialize();
     }
 
     public static void RequestExit()
@@ -58,6 +63,7 @@ public partial class App : Application
         if (Settings.StopSpawnedBackendOnExit)
             Backend.StopOwnedBackend();
         Backend.Dispose();
+        _tray?.Dispose();
         _guard?.Dispose();
         Log.Info("退出");
         base.OnExit(e);
