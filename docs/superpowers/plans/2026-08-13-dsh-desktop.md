@@ -20,7 +20,7 @@
 - UI 文案用中文；命名空间根 `DshDesktop`；C# 12+（collection expression、file-scoped namespace 可用）。
 - 每任务以可独立验证的交付物结束，每个任务末尾提交（提交信息 `feat:` / `test:` / `docs:` 前缀）。
 - 手动验证中**不得**杀掉当前 3080 上正在运行的会话后端（那是正在使用中的 Harness）；spawn 路径的验证放到 Task 9 最终清单，由用户主动退出该后端后进行。
-- WPF 项目（`UseWPF=true`）**不含** `System.IO` 隐式 using（WindowsDesktop SDK 为避免与 `System.Windows.Shapes.Path` 冲突而剔除）：源码中用到 `Path`/`File`/`Stream`/`TextWriter` 的文件必须显式 `using System.IO;`。
+- WPF 项目（`UseWPF=true`）**不含** `System.IO` 与 `System.Net.Http` 隐式 using（WindowsDesktop SDK 为避免与 `System.Windows.Shapes.Path` 等冲突而剔除）：源码中用到 `Path`/`File`/`Stream`/`TextWriter` 的文件必须显式 `using System.IO;`，用到 `HttpClient`/`HttpRequestException` 的文件必须显式 `using System.Net.Http;`。
 - 本计划的测试 csproj 未启用 `<Using Include="Xunit" />`：所有测试文件必须显式 `using Xunit;`。
 - `AppSettings` 的 `WindowLeft`/`WindowTop` 默认为 `double.NaN`：序列化需 `JsonNumberHandling.AllowNamedFloatingPointLiterals`。
 - WPF WebView2 有 airspace 限制：WPF 覆盖层无法渲染在 WebView2 之上，离线覆盖层采用「折叠 WebView2 + 全窗覆盖层」方案。
@@ -664,6 +664,7 @@ Expected: FAIL，`ProbeResult`、`HttpBackendProbe` 不存在。
 
 ```csharp
 using System.Net;
+using System.Net.Http;
 
 namespace DshDesktop.Backend;
 
