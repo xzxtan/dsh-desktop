@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Threading;
 using DshDesktop.Backend;
 using Microsoft.Web.WebView2.Core;
 
@@ -20,6 +21,8 @@ public partial class MainWindow : Window
         _backend = backend;
         InitializeComponent();
         _backend.StateChanged += OnBackendStateChanged;
+        SizeChanged += (_, _) => Dispatcher.BeginInvoke(DispatcherPriority.Loaded, ApplyCornerRounding);
+        DpiChanged += (_, _) => Dispatcher.BeginInvoke(DispatcherPriority.Loaded, ApplyCornerRounding);
 
         var placement = App.Settings;
         if (!double.IsNaN(placement.WindowLeft) && !double.IsNaN(placement.WindowTop))
@@ -30,6 +33,69 @@ public partial class MainWindow : Window
         Width = placement.WindowWidth;
         Height = placement.WindowHeight;
     }
+
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        if (PresentationSource.FromVisual(this) is HwndSource source)
+            source.AddHook(WndProcHook);
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, ApplyCornerRounding);
+    }
+
+    private const int WM_ENTERSIZEMOVE = 0x0231;
+    private const int WM_EXITSIZEMOVE = 0x0232;
+
+    private IntPtr WndProcHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        switch (msg)
+        {
+            case WM_ENTERSIZEMOVE:
+                // 系统移动/缩放循环期间保持方形：非矩形区域的窗口移动是慢路径，
+                // 若圆角区域在循环里逐帧重建会明显掉帧。
+                SetWindowRgn(hwnd, IntPtr.Zero, false);
+                break;
+            case WM_EXITSIZEMOVE:
+                Dispatcher.BeginInvoke(DispatcherPriority.Loaded, ApplyCornerRounding);
+                break;
+        }
+        return IntPtr.Zero;
+    }
+
+    /// <summary>
+    /// 自管窗口四角圆角（Win10 无 DWM 原生圆角）：
+    /// 拖动/缩放期间由 WM_ENTERSIZEMOVE 临时切方形，结束后恢复；
+    /// 最大化保持方形。应用统一经 Dispatcher 延后，避开 WindowChrome 同步区域管理。
+    /// </summary>
+    private void ApplyCornerRounding()
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd == IntPtr.Zero) return;
+
+        if (WindowState == WindowState.Maximized
+            || double.IsNaN(ActualWidth) || ActualWidth <= 0
+            || double.IsNaN(ActualHeight) || ActualHeight <= 0)
+        {
+            if (WindowState == WindowState.Maximized)
+                SetWindowRgn(hwnd, IntPtr.Zero, false);
+            return;
+        }
+
+        var dpi = VisualTreeHelper.GetDpi(this);
+        var w = (int)Math.Ceiling(ActualWidth * dpi.DpiScaleX);
+        var h = (int)Math.Ceiling(ActualHeight * dpi.DpiScaleY);
+        var rgn = CreateRoundRectRgn(0, 0, w + 1, h + 1, CornerRadiusPx, CornerRadiusPx);
+        if (rgn != IntPtr.Zero)
+            SetWindowRgn(hwnd, rgn, true);
+    }
+
+    private const int CornerRadiusPx = 12;
+
+    [DllImport("gdi32.dll")]
+    private static extern IntPtr CreateRoundRectRgn(
+        int left, int top, int right, int bottom, int widthEllipse, int heightEllipse);
+
+    [DllImport("user32.dll")]
+    private static extern int SetWindowRgn(IntPtr hWnd, IntPtr hRgn, bool bRedraw);
 
     /// <summary>
     /// 注入到 Harness 页面的脚本（每个文档创建时注册，DOMContentLoaded 后执行，幂等自愈）：
@@ -277,6 +343,7 @@ public partial class MainWindow : Window
     {
         base.OnStateChanged(e);
         MaximizeButton.Content = WindowState == WindowState.Maximized ? "\uE923" : "\uE922";
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, ApplyCornerRounding);
     }
 
     /// <summary>覆盖层空白区按下 = 拖动窗口（按钮区域除外）。</summary>
