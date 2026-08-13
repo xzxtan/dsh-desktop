@@ -2,6 +2,7 @@ using System.Windows;
 using DshDesktop.Backend;
 using DshDesktop.Logging;
 using DshDesktop.Settings;
+using DshDesktop.SingleInstance;
 
 namespace DshDesktop;
 
@@ -14,6 +15,7 @@ public partial class App : Application
     public static BackendManager Backend = null!;
 
     private MainWindow? _mainWindow;
+    private SingleInstanceGuard? _guard;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -23,6 +25,14 @@ public partial class App : Application
         SettingsStore = new SettingsStore(AppPaths.SettingsFile);
         Settings = SettingsStore.Load();
         Log.Info($"启动 dsh-desktop，参数: {string.Join(' ', e.Args)}");
+
+        _guard = SingleInstanceGuard.Acquire();
+        if (!_guard.IsFirstInstance)
+        {
+            SingleInstanceGuard.ForwardArgsAndExit(e.Args);
+            Shutdown();
+            return;
+        }
 
         Backend = new BackendManager(Settings, new HttpBackendProbe(), new ProcessRunner(), Log);
         Backend.StateChanged += state => Log.Info($"后端状态: {state}");
@@ -48,6 +58,7 @@ public partial class App : Application
         if (Settings.StopSpawnedBackendOnExit)
             Backend.StopOwnedBackend();
         Backend.Dispose();
+        _guard?.Dispose();
         Log.Info("退出");
         base.OnExit(e);
     }
