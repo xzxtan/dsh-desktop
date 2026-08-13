@@ -68,6 +68,8 @@ public sealed class BackendManager : IDisposable
                 return false;
         }
 
+        _healthCts?.Cancel(); // 停止旧监控循环：重试拉起期间避免旧循环把 Spawning/WaitingReady 误报为 Offline
+
         Transition(BackendState.Spawning);
         _log.Info($"启动后端: {_settings.DshCommand} {string.Join(' ', _settings.DshArgs)}");
         int pid;

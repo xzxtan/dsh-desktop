@@ -18,7 +18,7 @@ public sealed class TrayService : IDisposable
     {
         _backend = backend;
         _window = window;
-        _backend.StateChanged += _ => Update();
+        _backend.StateChanged += OnBackendStateChanged;
     }
 
     public void Initialize()
@@ -65,6 +65,8 @@ public sealed class TrayService : IDisposable
         _window.Activate();
     }
 
+    private void OnBackendStateChanged(BackendState _) => Update();
+
     private void Update()
     {
         if (!_window.Dispatcher.CheckAccess())
@@ -93,5 +95,9 @@ public sealed class TrayService : IDisposable
         _icon.ToolTipText = $"DeepSeek Harness — {_stateItem.Header}";
     }
 
-    public void Dispose() => _icon.Dispose();
+    public void Dispose()
+    {
+        _backend.StateChanged -= OnBackendStateChanged;
+        _icon.Dispose();
+    }
 }

@@ -145,11 +145,11 @@ public sealed class BackendManagerTests
     }
 
     [Fact]
-    public void StopOwnedBackend_NoOp_WhenAttachedOnly()
+    public async Task StopOwnedBackend_NoOp_WhenAttachedOnly()
     {
         var (manager, probe, runner, _) = NewManager();
         probe.Results.Enqueue(ProbeResult.Ready);
-        manager.EnsureStartedAsync().GetAwaiter().GetResult();
+        Assert.True(await manager.EnsureStartedAsync());
 
         manager.StopOwnedBackend();
 

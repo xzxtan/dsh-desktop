@@ -16,6 +16,15 @@ public partial class MainWindow : Window
         _backend = backend;
         InitializeComponent();
         _backend.StateChanged += OnBackendStateChanged;
+
+        var placement = App.Settings;
+        if (!double.IsNaN(placement.WindowLeft) && !double.IsNaN(placement.WindowTop))
+        {
+            Left = placement.WindowLeft;
+            Top = placement.WindowTop;
+        }
+        Width = placement.WindowWidth;
+        Height = placement.WindowHeight;
     }
 
     public async Task InitAsync()
@@ -130,6 +139,8 @@ public partial class MainWindow : Window
         var ok = await _backend.RetryAsync();
         if (ok && Browser.CoreWebView2 is not null)
             NavigateToBackend();
+        else if (!ok)
+            ShowOverlay("启动失败", "无法启动 dsh web。可在设置中配置 dsh 路径后重试。", showRetry: true);
     }
 
     private void Settings_Click(object sender, RoutedEventArgs e)
@@ -148,6 +159,13 @@ public partial class MainWindow : Window
 
     protected override void OnClosing(CancelEventArgs e)
     {
+        var placement = App.Settings;
+        placement.WindowLeft = Left;
+        placement.WindowTop = Top;
+        placement.WindowWidth = Width;
+        placement.WindowHeight = Height;
+        App.SettingsStore.Save(placement);
+
         if (App.IsExiting) return;
         if (App.Settings.CloseToTray)
         {
