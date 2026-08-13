@@ -1377,7 +1377,6 @@ namespace DshDesktop;
 public partial class MainWindow : Window
 {
     private readonly BackendManager _backend;
-    private bool _navigatedOnce;
 
     public MainWindow(BackendManager backend)
     {
@@ -1414,9 +1413,9 @@ public partial class MainWindow : Window
     private void NavigateToBackend()
     {
         var url = _backend.BaseUrl;
-        if (Browser.CoreWebView2 is not null && Browser.CoreWebView2.Source != url)
+        // CoreWebView2.Source 是 string，而 WPF 控件的 Browser.Source 是 Uri —— 用后者比较。
+        if (Browser.CoreWebView2 is not null && Browser.Source != url)
             Browser.CoreWebView2.Navigate(url.ToString());
-        _navigatedOnce = true;
         HideOverlay();
     }
 
@@ -1431,10 +1430,9 @@ public partial class MainWindow : Window
                     ShowOverlay("正在启动 DeepSeek Harness…", "后端未运行，正在自动拉起 dsh web", showRetry: false);
                     break;
                 case BackendState.Online:
+                    // InitAsync 末尾对「Online 先于 CoreWebView2 就绪」的情形兜底导航。
                     if (Browser.CoreWebView2 is not null)
                         NavigateToBackend();
-                    else
-                        _navigatedOnce = false; // 等 InitAsync 完成后导航
                     HideOverlay();
                     break;
                 case BackendState.Offline:
