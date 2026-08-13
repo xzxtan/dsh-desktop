@@ -164,7 +164,14 @@ public partial class MainWindow : Window
         placement.WindowTop = Top;
         placement.WindowWidth = Width;
         placement.WindowHeight = Height;
-        App.SettingsStore.Save(placement);
+        try
+        {
+            App.SettingsStore.Save(placement);
+        }
+        catch (Exception ex)
+        {
+            App.Log.Error("保存窗口位置失败", ex);
+        }
 
         if (App.IsExiting) return;
         if (App.Settings.CloseToTray)
