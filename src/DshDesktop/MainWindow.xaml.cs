@@ -46,14 +46,19 @@ public partial class MainWindow : Window
           window.__dshShellInjected = true;
 
           const css = `
+          /* 颜色全部引用页面主题令牌（body 上的 --dsw-alias-*），暗/亮主题自动一致 */
           #dsh-shell-cluster { position: fixed; top: 2px; right: 2px; z-index: 2147483000;
-            display: flex; gap: 2px; height: 28px; padding: 0 2px; border-radius: 6px;
-            background: rgba(20,24,38,0.92); -webkit-user-select: none; user-select: none; }
-          #dsh-shell-cluster button { all: unset; width: 36px; height: 28px; display: inline-flex;
-            align-items: center; justify-content: center; color: #C8CDD6;
-            font: 12px 'Segoe MDL2 Assets'; cursor: default; border-radius: 4px; }
-          #dsh-shell-cluster button:hover { background: rgba(255,255,255,0.14); }
-          #dsh-shell-cluster button#dsh-shell-close:hover { background: #C42B1C; color: #fff; }
+            display: flex; gap: 2px; height: 28px; padding: 0 2px; border-radius: 8px;
+            background: var(--dsw-alias-bg-layer-1, rgba(20,24,38,0.92));
+            border: 1px solid var(--dsw-alias-border-l2, rgba(255,255,255,0.12));
+            -webkit-user-select: none; user-select: none; }
+          #dsh-shell-cluster button { all: unset; width: 36px; height: 26px; display: inline-flex;
+            align-items: center; justify-content: center;
+            color: var(--dsw-alias-label-primary, #F9FAFB);
+            font: 12px 'Segoe MDL2 Assets'; cursor: default; border-radius: 6px; }
+          #dsh-shell-cluster button:hover { background: var(--dsw-alias-bg-layer-2, rgba(255,255,255,0.14)); }
+          #dsh-shell-cluster button#dsh-shell-close:hover {
+            background: var(--dsw-alias-state-error-primary, #C42B1C); color: #fff; }
           .wSkVaW_headerUtilities { margin-right: 118px !important; }
           .ydkMvW_header { padding-right: 118px !important; }
           `;
