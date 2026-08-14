@@ -44,6 +44,82 @@ public partial class MainWindow : Window
 
     private const int WM_ENTERSIZEMOVE = 0x0231;
     private const int WM_EXITSIZEMOVE = 0x0232;
+    private const int WM_GETMINMAXINFO = 0x0024;
+    private const uint MonitorDefaultToNearest = 0x2;
+
+    /// <summary>
+    /// 自动隐藏任务栏时，工作区等于全屏，最大化窗口会一直铺到屏幕底边；
+    /// 壳层对「盖住底边且无标题栏(无非客户区)」的窗口判定为全屏应用，从而不弹出自动隐藏的任务栏。
+    /// 因此最大化时给底部留出 2px 触发带（任务栏隐藏态的 2px 探出条），鼠标移到最底边即可唤起任务栏。
+    /// 任务栏可见（工作区小于全屏）时不做干预，沿用 WindowChrome 原有的按工作区收边逻辑。
+    /// 返回 true 表示已接管该消息（阻止 WPF/WindowChrome 覆盖我们的取值）。
+    /// </summary>
+    private bool HandleMaximizeBounds(IntPtr hwnd, IntPtr lParam)
+    {
+        var mmi = Marshal.PtrToStructure<MINMAXINFO>(lParam);
+        var hMonitor = MonitorFromWindow(hwnd, MonitorDefaultToNearest);
+        var info = new MONITORINFO { cbSize = Marshal.SizeOf<MONITORINFO>() };
+        if (!GetMonitorInfo(hMonitor, ref info))
+            return false;
+
+        // 自动隐藏：该监视器工作区与全屏等高（任务栏未占用底部空间）
+        if (info.rcWork.Bottom >= info.rcMonitor.Bottom)
+        {
+            mmi.ptMaxPosition.X = info.rcWork.Left;
+            mmi.ptMaxPosition.Y = info.rcWork.Top;
+            mmi.ptMaxSize.X = info.rcWork.Right - info.rcWork.Left;
+            mmi.ptMaxSize.Y = info.rcWork.Bottom - info.rcWork.Top - AutoHideTrayTriggerStripPx;
+            mmi.ptMaxTrackSize.X = mmi.ptMaxSize.X;
+            mmi.ptMaxTrackSize.Y = mmi.ptMaxSize.Y;
+            Marshal.StructureToPtr(mmi, lParam, false);
+            return true;
+        }
+        // 任务栏可见：不接管，交给 WPF/WindowChrome 原有逻辑（最大化收在工作区内）。
+        return false;
+    }
+
+    private const int AutoHideTrayTriggerStripPx = 2;
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint dwFlags);
+
+    [DllImport("user32.dll")]
+    private static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFO lpmi);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct POINT
+    {
+        public int X;
+        public int Y;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct RECT
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MINMAXINFO
+    {
+        public POINT ptReserved;
+        public POINT ptMaxSize;
+        public POINT ptMaxPosition;
+        public POINT ptMinTrackSize;
+        public POINT ptMaxTrackSize;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MONITORINFO
+    {
+        public int cbSize;
+        public RECT rcMonitor;
+        public RECT rcWork;
+        public uint dwFlags;
+    }
 
     private IntPtr WndProcHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
@@ -56,6 +132,9 @@ public partial class MainWindow : Window
                 break;
             case WM_EXITSIZEMOVE:
                 Dispatcher.BeginInvoke(DispatcherPriority.Loaded, ApplyCornerRounding);
+                break;
+            case WM_GETMINMAXINFO:
+                handled = HandleMaximizeBounds(hwnd, lParam);
                 break;
         }
         return IntPtr.Zero;
